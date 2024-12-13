@@ -1,14 +1,9 @@
 import express from "express";
 import VerifyToken from "../controllers/verifyTokenController.js";
-
+const newClassObjet= new VerifyToken();
 const router = express.Router();
 
-const verifyTokenRouter = (encryptionKey) => {
-    const verifyToken = new VerifyToken(encryptionKey);
+router.post('/', newClassObjet.verifyToken);
 
-    router.post("/", verifyToken.verifyToken);
 
-    return router;
-};
-
-export default verifyTokenRouter;
+export default router;

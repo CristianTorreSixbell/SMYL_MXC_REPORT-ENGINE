@@ -1,13 +1,16 @@
 import jwt from 'jsonwebtoken';
 import logger from '../lib/Logger.js';
- 
-//import { connectTo, disconectMongo } from '../utils/mongoDb.js';
 import crypto from 'crypto';
+import TokenModel from '../models/tokenModel.js';
+import { ApplicationModel } from '../models/clientApplicationModel.js';
+import { chargeData } from '../lib/dotenvExtractor.js';
+
+chargeData();
 
 class VerifyToken {
-    constructor(encryptionKey) {
+    constructor() {
         this.logEvent = (type, event, submoduleInd) => {
-            const submodules = ['DECRYPT-TOKEN', 'VERIFY-TOKEN', 'VERIFY-TENENT-IN-CONFIG', 'VERIFY-TENENT-IN-OAUTH'];
+            const submodules = ['MAIN', 'VERIFY-CLIENT', 'VERIFY-TOKEN-IN-OAUTH'];
             const moduleName = 'VERIFY-TOKEN';
             const submodule = parseInt(submoduleInd) ? `][${submodules[parseInt(submoduleInd)]}` : '';
             
@@ -28,82 +31,91 @@ class VerifyToken {
             }
         };
         
-        this.secretKey = encryptionKey;
-        this.encryptionKey = encryptionKey;
-        this.verifyNameFunctionEvent = (event) => `[verifyToken(${event})]:`;
-        this.verifyClientName = (event) => `[verifyClient(${event})]:`;
+        this.secretKey = process.argv[9] || null;
+        this.encryptionKey = process.argv[6] || null;
         this.verifyToken = this.verifyToken.bind(this);
-        this.insightConfigDb = 'Insight_Config';
-        this.insightOauthDb = 'Insight_Oauth';
-        this.verifyTenantInConfig = this.verifyTenantInConfig.bind(this);
-        this.secondCollection = 'tenants';
-    }
-
-    decryptToken(encryptedToken) {
-        this.logEvent('INFO', 'Decrypting token...', 0);
-        const decipher = crypto.createDecipher('aes-256-cbc', this.encryptionKey);
-        let decrypted = decipher.update(encryptedToken, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-        this.logEvent('INFO', 'Token decrypted successfully', 0);
-        return decrypted;
+        this.verifyClient = this.verifyClient.bind(this);
+        this.verifyTokenInOauth = this.verifyTokenInOauth.bind(this);
+        this.decryptToken = (encryptedToken) => {
+            const textParts = encryptedToken.split(':');
+            const iv = Buffer.from(textParts.shift(), 'hex');
+            const encryptedText = textParts.join(':');
+            const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(this.encryptionKey, 'utf8'), iv);
+            let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+            decrypted += decipher.final('utf8');
+            this.logEvent('INFO', 'Token decrypted successfully', 1);
+            return decrypted;
+        };
+        
     }
 
     async verifyToken(req, res) {
         try {
-            this.logEvent('INFO', 'Verifying token...', 1);
+            this.logEvent('INFO', 'Verifying token...', 0);
 
-            const encryptedToken = req.headers['authorization'].split('Bearer ')[1].trim();
-            const token = this.decryptToken(encryptedToken);
+            const token = req.headers['authorization'].split('Bearer ')[1].trim();
 
-            this.logEvent('INFO',`Token recibido correctamente\nEvaluando...`,1);
+            this.logEvent('INFO', `Token recibido correctamente\nEvaluando...`, 0);
 
-            const decoded = jwt.verify(token, this.secretKey);        
+            const decoded = jwt.verify(token, this.secretKey);
             const clientSecret = decoded.clientSecret;
             const clientId = decoded.clientId;
             const scope = decoded.scope;
-            
-            const configResult = await this.verifyTenantInConfig(clientId, clientSecret);
-            const oauthResult = await this.verifyTenantInOauth(clientId, clientSecret);
-            if (configResult.status !== 200 || oauthResult.status !== 200) {
-                throw new Error('Error verifying client');
+ 
+            const verifyResult = await this.verifyClient(clientId, clientSecret);
+            const tokenVerifyResult = await this.verifyTokenInOauth(clientId, token);
+            if (verifyResult.status !== 200 || tokenVerifyResult.status !== 200) {
+                throw new Error('Error verifying client or token');
             }
+            
             const combinedResponse = {
                 message: 'Token verified successfully',
                 decoded: decoded,
-                configResult: configResult.data,
-                oauthResult: oauthResult.data
+                configResult: verifyResult.data
             };
-            const encodedResponse = jwt.sign(combinedResponse, this.secretKey, { expiresIn: '1h' });        
+            const encodedResponse = jwt.sign(combinedResponse, this.secretKey, { expiresIn: '1h' });
             return res.status(200).json({ encodedResponse });
-        } catch (error) {
-            logger.error(`${this.verifyNameFunctionEvent('ERROR')} Error verifying token: ${error}`);
+        } catch (e) {
+            this.logEvent('ERROR', `Error verifying token: ${e}`, 0);
+            console.log(e);
+            console.log(JSON.stringify(e));
             return res.status(401).json({ message: 'Invalid token' });
         }
     }
 
-    async verifyTenantInConfig(clientId, clientSecret) {
+    async verifyClient(clientId, clientSecret) {
         try {
-            if (!clientId || !clientSecret || !this.insightConfigDb) {
+            if (!clientId || !clientSecret) {
                 throw new Error('Invalid parameters');
             }
-            this.logEvent('INFO', 'Verifying client...', 2);
-            await connectTo(this.insightConfigDb);
-            const findResult = await ConfigTenantModel.find({ clientId: clientId });
-            if (!findResult) {
+            this.logEvent('INFO', 'Verifying client...', 1);
+
+            const findResult = await ApplicationModel.find({});
+            if (!findResult || findResult.length === 0) {
+                throw new Error('There are no clients in the database');
+            }
+            
+            let isIN = false;
+            for (const result of findResult) {
+                if (result.clientId === clientId && clientSecret === result.clientSecret) {
+                    isIN = true;
+                }
+            }
+            if (!isIN) {
                 throw new Error('Client not found');
             }
-            const configModules = findResult[0].modules;
-            await disconectMongo();
-            this.logEvent('INFO', 'Client verified successfully', 2);
+
+            this.logEvent('INFO', 'Client verified successfully', 1);
 
             return {
                 status: 200,
-                data: configModules
+                data: `Client verified successfully,` + isIN
             };
 
         } catch (e) {
- 
-            this.logEvent('ERROR', `Error verifying client: ${e}`, 2);
+            this.logEvent('ERROR', `Error verifying client: ${e}`, 1);
+            console.log(e);
+            console.log(JSON.stringify(e));
             return {
                 status: 500,
                 data: `[verifyClient(Error)]: (" Error verifying client ${e} ")`
@@ -111,43 +123,42 @@ class VerifyToken {
         }
     }
 
-    async verifyTenantInOauth(clientId, clientSecret) {
+    async verifyTokenInOauth(clientId, token) {
         try {
-            if (!clientId || !clientSecret || !this.insightOauthDb) {
+            if (!clientId || !token) {
                 throw new Error('Invalid parameters');
             }
-            logger.info(`${this.verifyClientName('INFO')} Verifying client...`);
-            const connectionResult = await connectTo(this.insightOauthDb);
-            if (connectionResult.status !== 200) {
-                throw new Error('Error connecting to database');
+            this.logEvent('INFO', 'Verifying token in oauth...', 2);
+
+            const findResult = await TokenModel.find({});
+            if (!findResult || findResult.length === 0) {
+                throw new Error('There is no token in the database');
             }
-            const client = connectionResult.data;
-            const collection = client.connection.collection(this.secondCollection);
-            const findResult = await collection.findOne({ clientId: clientId });
-            if (!findResult) {
-                throw new Error('Client not found');
+            let isIN = false;
+            for (const result of findResult) {
+                console.log( result.token );
+                const decryptedToken =  result.token ;
+                const decryptedClientName =  result.client_name ;
+                if (decryptedClientName === clientId && decryptedToken.includes(token)) {
+                    isIN = true;
+                }
             }
-            this.logEvent('INFO', 'Client verified successfully', 3);
-            const genesysOauth = findResult.GenesysOAuth;
-            const mongoConfig = findResult.mongoConfig;
-            console.log(genesysOauth);
-            if (!genesysOauth || !mongoConfig) {
-                throw new Error('Error fetching client data');
+            if (!isIN) {
+                throw new Error('Token not found');
             }
-            await disconectMongo();
-            this.logEvent('INFO', 'Client verified successfully', 3);
+            this.logEvent('INFO', 'Token verified successfully', 2);
+
             return {
                 status: 200,
-                data: {
-                    genesysOauth: genesysOauth,
-                    mongoConfig: mongoConfig
-                }
+                data: `Token verified successfully,` + isIN
             };
-        } catch (error) {
-            this.logEvent('ERROR', `Error verifying client: ${error}`, 3);
+        } catch (e) {
+            this.logEvent('ERROR', `Error verifying token in oauth: ${e}`, 0);
+            console.log(e);
+            console.log(JSON.stringify(e));
             return {
                 status: 500,
-                data: `[verifyClient(Error)]: (" Error verifying client ${error} ")`
+                data: `[verifyTokenInOauth(Error)]: (" Error verifying token in oauth ${e} ")`
             };
         }
     }

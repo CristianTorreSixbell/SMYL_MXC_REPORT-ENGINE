@@ -1,29 +1,18 @@
 import express from 'express';
 import { timeStamp } from './utils/timeStampCst.js';
-import verifyTokenRouter from './routes/verifyTokenRoute.js';
-import generateTokenRoute from './routes/generateTokenRoute.js';
+import generateTokenRoute from './routes/createTokenRoute.js';
+import verifyTokenRoute from './routes/verifyTokenRoute.js';
+import createNewClientRoute from './routes/createNewClientRoute.js';
 import MongoDBConnector from './lib/MongooDB.js';
-import { MONGO_URL, MONGO_USER, MONGO_PASS, MONGO_DB_NAME, ENCRYPTION_KEY,PORT } from './lib/dotenvExtractor.js';
-
+import { chargeData } from './lib/dotenvExtractor.js';
+import timeout from 'connect-timeout';
+import cors from 'cors';
+chargeData();
 const app = express();
+ 
 
-const envParams={
-    "MONGO_URL":MONGO_URL,
-    "MONGO_USER":MONGO_USER,
-    "MONGO_PASS":MONGO_PASS,
-    "MONGO_DB_NAME":MONGO_DB_NAME,
-    "ENCRYPTION_KEY":ENCRYPTION_KEY,
-    "PORT":PORT
-};
+ 
 
-if( Object.values(envParams).filter(value => value === null || value === undefined ).length > 20){
-    console.error(`${timeStamp}[REPORT-ENGINE]-[SERVER]: Missing environment variables`);
-    process.exit(1);
-}
-
-   //  Encryption key
-process.argv.push(process.env.MONGO_URL, process.env.MONGO_USER,process.env.MONGO_PASS,process.env.MONGO_DB_NAME,process.env.ENCRYPTION_KEY,process.env.PORT);
-//console.log(JSON.stringify(JSON.stringify(process.argv)));
 const mongoDBConnector = new MongoDBConnector({
     url: process.argv[2],
     user: process.argv[3],
@@ -34,8 +23,13 @@ const mongoDBConnector = new MongoDBConnector({
 const startServer = async () => {
     try {
         await mongoDBConnector.connect();
-        app.use('/verifyToken', verifyTokenRouter(process.argv[5]));
-        app.use('/creteToken', generateTokenRoute(process.argv[5], process.argv[6]));
+        app.use(express.json());
+        app.use(cors());
+        app.use(express.urlencoded({ extended: true }));
+        app.use('/oauth/token', generateTokenRoute); // Ensure the route is correctly set
+        app.use('/oauth/verify', timeout('10s'), verifyTokenRoute); // Ensure the route is correctly set
+        app.use('/oauth/newClient', timeout('10s'), createNewClientRoute); // Ensure the route is correctly set
+
         app.listen(process.argv[7], () => {
             console.log(`${timeStamp}[REPORT-ENGINE]-[SERVER]: Server is running on port http://127.0.0.1:${process.argv[7]}`);
         });
@@ -45,4 +39,4 @@ const startServer = async () => {
     }
 };
 
-startServer();  
+startServer();
