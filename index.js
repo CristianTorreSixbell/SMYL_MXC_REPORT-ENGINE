@@ -1,17 +1,22 @@
 import express from 'express';
-import { timeStamp } from './utils/timeStampCst.js';
-import generateTokenRoute from './routes/createTokenRoute.js';
-import verifyTokenRoute from './routes/verifyTokenRoute.js';
-import createNewClientRoute from './routes/createNewClientRoute.js';
-import MongoDBConnector from './lib/MongooDB.js';
-import { chargeData } from './lib/dotenvExtractor.js';
 import timeout from 'connect-timeout';
 import cors from 'cors';
+import MongoDBConnector from     './lib/MongooDB.js';
+import { chargeData } from       './lib/dotenvExtractor.js';
+import MSSQLConnector from       './lib/sqlConnection.js';
+import { timeStamp } from        './utils/timeStampCst.js';
+import generateTokenRoute from   './routes/createTokenRoute.js';
+import verifyTokenRoute from     './routes/verifyTokenRoute.js';
+import createNewClientRoute from './routes/createNewClientRoute.js';
+import excecSpRoute from         './routes/execSpRouter.js'
+
+
 chargeData();
 const app = express();
  
 
  
+const sqlConnector = new MSSQLConnector( );
 
 const mongoDBConnector = new MongoDBConnector({
     url: process.argv[2],
@@ -23,13 +28,14 @@ const mongoDBConnector = new MongoDBConnector({
 const startServer = async () => {
     try {
         await mongoDBConnector.connect();
+        await sqlConnector.connect();
         app.use(express.json());
         app.use(cors());
         app.use(express.urlencoded({ extended: true }));
         app.use('/oauth/token', generateTokenRoute); // Ensure the route is correctly set
         app.use('/oauth/verify', timeout('10s'), verifyTokenRoute); // Ensure the route is correctly set
         app.use('/oauth/newClient', timeout('10s'), createNewClientRoute); // Ensure the route is correctly set
-
+        app.use('/',excecSpRoute)
         app.listen(process.argv[7], () => {
             console.log(`${timeStamp}[REPORT-ENGINE]-[SERVER]: Server is running on port http://127.0.0.1:${process.argv[7]}`);
         });
