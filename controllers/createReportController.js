@@ -39,9 +39,7 @@ class createReport{
         };
         this.extractReportData= this.extractReportData.bind(this);
         this.checkFolder= this.checkFolder.bind(this);
-        
-
-    }
+     }
     async extractReportData(req, res){
        try{
             this.logEvent('INFO', 'Extrayendo intervalo..........', 0);
