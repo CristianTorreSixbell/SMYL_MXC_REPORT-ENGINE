@@ -2,6 +2,9 @@
 node_modules/
 npm-debug.log
 yarn-error.log
+Verify-token-test.js
+tokenCreationTest.js
+promt.txt
 
 # Logs
 logs/

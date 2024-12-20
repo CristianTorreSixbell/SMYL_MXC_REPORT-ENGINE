@@ -1,6 +1,6 @@
-import rowsQuantity from '../controllers/execSpController.js';
+import ExectSp from '../controllers/execSpController.js';
 import express from 'express';
-const newClassObj= new rowsQuantity();
+const newClassObj= new ExectSp;
 const router = express.Router();
 
 router.get('/', newClassObj.exectSp);

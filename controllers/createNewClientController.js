@@ -83,8 +83,6 @@ class InsertApplication {
 
             this.logEvent('INFO', 'Inserting application...', 2);
 
-       
-
             const applicationData = {
                 clientId: clientId,
                 clientSecret: clientSecret

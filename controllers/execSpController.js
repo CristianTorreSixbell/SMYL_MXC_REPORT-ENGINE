@@ -1,9 +1,10 @@
 import sql from 'mssql'; 
-import { chargeData } from '../lib/dotenvExtractor';
+import { chargeData } from '../lib/dotenvExtractor.js';
 import cron from 'node-cron';
 import logger from '../lib/Logger.js';
 import dayjs from 'dayjs';
 import timezone  from 'dayjs/plugin/timezone.js'; 
+import utc from 'dayjs/plugin/utc.js';
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.tz.setDefault('America/Chicago');
@@ -69,6 +70,8 @@ class ExectSp{
     }
 }
 
+
+export default ExectSp;
 const newExectSpClassObjt= new ExectSp;
 const executor = newExectSpClassObjt.exectSp;
 await executor();
