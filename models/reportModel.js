@@ -1,19 +1,10 @@
 import mongoose from 'mongoose';
-import crypto from 'crypto';
-import { chargeData } from '../lib/dotenvExtractor.js';
-chargeData();
+ 
 const { Schema } = mongoose;
 
-const encryptionKey = process.env.ENCRYPTION_KEY;
+ 
 
-const encrypt = (text) => {
-    const iv = crypto.randomBytes(16); // Initialization vector
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(encryptionKey, 'utf8'), iv);
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return iv.toString('hex') + ':' + encrypted; // Prepend IV for decryption
-};
-
+ 
 const reportSchema = new Schema({
     datesTFind: {
         type: String, // Cambiado a String para reflejar el formato en la base de datos
@@ -36,12 +27,7 @@ const reportSchema = new Schema({
     result: {
         type: String,
         required: true  // resultado  success/fail
-    },
-    file: {
-        type: String,
-        required: false,
-        set: encrypt    // file  
-    }
+    } 
 });
 
 // Index to automatically delete documents after 1 day
