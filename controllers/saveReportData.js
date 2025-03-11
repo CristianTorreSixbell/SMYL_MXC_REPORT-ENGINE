@@ -1,9 +1,6 @@
 import reportModel from "../models/reportModel.js";
 
 
-
-
-
 async function saveReportData(req, res) {  
     try {
         const { datesTFind, dateProcess, reportId, state, result, file } = req.body;
@@ -15,9 +12,6 @@ async function saveReportData(req, res) {
         return res.status(500).send('Error '+error);
     }
 }
-
-
-
 
 export {
     saveReportData

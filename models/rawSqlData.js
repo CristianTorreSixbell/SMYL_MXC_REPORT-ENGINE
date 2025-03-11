@@ -10,6 +10,7 @@ if (encryptionKey.length !== 32) {
     throw new Error('Invalid encryption key length. Key must be 32 bytes.');
 }
 
+
 const encrypt = (text) => {
     const iv = crypto.randomBytes(16); // Initialization vector
     const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(encryptionKey, 'utf8'), iv);
@@ -28,6 +29,7 @@ const decrypt = (text) => {
     return decrypted;
 };
 
+
 const historicalSchema = new Schema({
     searchingPeriod: {
         type: String,
@@ -38,8 +40,8 @@ const historicalSchema = new Schema({
     clientReporData:  {
         type: Schema.Types.Mixed,
         required: true,
-        set: encrypt,
-        get: decrypt
+        set: (data) => encrypt(JSON.stringify(data)), // Convert array to JSON string before encrypting
+        get: (data) => JSON.parse(decrypt(data))      // Decrypt and parse JSON string back to array
     }
     
      

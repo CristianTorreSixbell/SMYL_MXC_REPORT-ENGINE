@@ -9,11 +9,7 @@ class InsertApplication {
     constructor() {
         this.logEvent = this.logEvent.bind(this);
         this.insertApplication = this.insertApplication.bind(this);
-        // this.encrypt = this.encrypt.bind(this);
-        // this.decrypt = this.decrypt.bind(this);
-
         this.encryptionKey = process.argv[6] || null;
-
         if (this.encryptionKey.length !== 32) {
             throw new Error('Invalid encryption key length. Key must be 32 bytes.');
         }
@@ -44,33 +40,7 @@ class InsertApplication {
             return;
         }
     }
-
-    // encrypt(text) {
-    //     try {
-    //         const iv = crypto.randomBytes(16);
-    //         const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(this.encryptionKey, 'utf8'), iv);
-    //         let encrypted = cipher.update(text, 'utf8', 'hex');
-    //         encrypted += cipher.final('hex');
-    //         this.logEvent('INFO', 'Data encrypted successfully', 0);
-    //         return iv.toString('hex') + ':' + encrypted;
-    //     } catch (e) {
-    //         this.logEvent('ERROR', `Error encrypting data ${e}`, 0);
-    //         console.log(e);
-    //         console.log(JSON.stringify(e, null, 4));
-    //         return null;
-    //     }
-    // }
-
-    // decrypt(encryptedText) {
-    //     const textParts = encryptedText.split(':');
-    //     const iv = Buffer.from(textParts.shift(), 'hex');
-    //     const encryptedData = textParts.join(':');
-    //     const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(this.encryptionKey, 'utf8'), iv);
-    //     let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
-    //     decrypted += decipher.final('utf8');
-    //     this.logEvent('INFO', 'Data decrypted successfully', 1);
-    //     return decrypted;
-    // }
+ 
 
     async insertApplication(req, res) {
         try {

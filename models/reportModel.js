@@ -1,10 +1,7 @@
 import mongoose from 'mongoose';
- 
+
 const { Schema } = mongoose;
 
- 
-
- 
 const reportSchema = new Schema({
     datesTFind: {
         type: String, // Cambiado a String para reflejar el formato en la base de datos
@@ -35,4 +32,4 @@ reportSchema.index({ expiration_date: 1 }, { expireAfterSeconds: 1300000 }); // 
 
 const reportModel = mongoose.model('reports', reportSchema);
 
-export  default  reportModel ;
+export default reportModel;

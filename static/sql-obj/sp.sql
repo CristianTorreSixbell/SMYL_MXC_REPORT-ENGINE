@@ -1,94 +1,188 @@
-CREATE PROCEDURE GetConversationDetailsByDate  
-    @StartDate DATETIME,  
-    @EndDate DATETIME  
-AS  
-BEGIN  
-    SET NOCOUNT ON;  
-    -- Insertar los resultados directamente en la tabla objetivo  
-    INSERT INTO [GNREPORT_SMNYL].[dbo].[Historical_Report] (  
-        CASE_ID,  
-        CONVERSATION_START,  
-        CONVERSATION_END,  
-        PARTICIPANT_ID,  
-        PARTICIPANT_NAME,  
-        ID_SESSION,  
-        EMAIL_ADDRESS_FROM,  
-        EMAIL_ADDRESS_TO,  
-        QUEUE_INTERACTION_INIT,  
-        QUEUE_INTERACTION_END,  
-        TOTAL_HOLD_TIME,  
-        CLIENT_INTERACTION_INIT,  
-        CLIENT_INTERACTION_END,  
-        TOTAL_CLIENT_INTERACTION_TIME,  
-        AGENT_INTERACTION_INIT,  
-        AGENT_INTERACTION_END,  
-        TOTAL_AGENT_INTERACTION_TIME,  
-        QUEUE_ID,  
-        QUEUE_NAME,  
-        SUBJET,  
-        TRANSFER_CALL,  
-        CASE_ENDED  
-    )  
-    SELECT   
-        DC.conversationId AS CASE_ID,  
-        DATEADD(HOUR, -6, DC.conversationStart) AS CONVERSATION_START,  
-        DATEADD(HOUR, -6, DC.conversationEnd) AS CONVERSATION_END,  
-        DP.participantId AS PARTICIPANT_ID,  
-        DP.participantName AS PARTICIPANT_NAME,  
-        DS.sessionId AS ID_SESSION,  
-        DS.addressFrom AS EMAIL_ADDRESS_FROM,  
-        DS.addressTo AS EMAIL_ADDRESS_TO,  
-        MIN(CASE WHEN SM.name_g = 'nOffered' THEN DATEADD(HOUR, -6, SM.emitDate) END) AS QUEUE_INTERACTION_INIT,  
-        MIN(CASE WHEN SM.name_g = 'tAcd' THEN DATEADD(HOUR, -6, SM.emitDate) END) AS QUEUE_INTERACTION_END,  
-        FORMAT(  
-            DATEADD(SECOND,   
-                DATEDIFF(SECOND,   
-                    MIN(CASE WHEN SM.name_g = 'nOffered' THEN SM.emitDate END),  
-                    MIN(CASE WHEN SM.name_g = 'tAcd' THEN SM.emitDate END)  
-                ), 0  
-            ), 'HH:mm:ss'  
-        ) AS TOTAL_HOLD_TIME,  
-        MIN(CASE WHEN SM.name_g = 'nConnected' THEN DATEADD(HOUR, -6, SM.emitDate) END) AS CLIENT_INTERACTION_INIT,  
-        MIN(CASE WHEN SM.name_g = 'tConnected' THEN DATEADD(HOUR, -6, SM.emitDate) END) AS CLIENT_INTERACTION_END,  
-        FORMAT(  
-            DATEADD(SECOND,   
-                DATEDIFF(SECOND,   
-                    MIN(CASE WHEN SM.name_g = 'nConnected' THEN SM.emitDate END),  
-                    MIN(CASE WHEN SM.name_g = 'tConnected' THEN SM.emitDate END)  
-                ), 0  
-            ), 'HH:mm:ss'  
-        ) AS TOTAL_CLIENT_INTERACTION_TIME,  
-        MIN(CASE WHEN SM.name_g = 'tAnswered' THEN DATEADD(HOUR, -6, SM.emitDate) END) AS AGENT_INTERACTION_INIT,  
-        MIN(CASE WHEN SM.name_g = 'tAcw' THEN DATEADD(HOUR, -6, SM.emitDate) END) AS AGENT_INTERACTION_END,  
-        FORMAT(  
-            DATEADD(SECOND,   
-                DATEDIFF(SECOND,   
-                    MIN(CASE WHEN SM.name_g = 'tAnswered' THEN SM.emitDate END),  
-                    MIN(CASE WHEN SM.name_g = 'tAcw' THEN SM.emitDate END)  
-                ), 0  
-            ), 'HH:mm:ss'  
-        ) AS TOTAL_AGENT_INTERACTION_TIME,  
-        NULL AS QUEUE_ID, -- Temporal hasta confirmar la columna  
-        NULL AS QUEUE_NAME, -- Temporal hasta confirmar la columna  
-        NULL AS SUBJET, -- Temporal hasta confirmar la columna  
-        NULL AS TRANSFER_CALL, -- Temporal hasta confirmar la columna  
-        NULL AS CASE_ENDED -- Temporal hasta confirmar la columna  
-    FROM   
-        [dbo].[Dim_Conversation] AS DC  
-    INNER JOIN   
-        [dbo].[Dim_Participant] AS DP  
-        ON DC.conversationId = DP.conversationId  
-    INNER JOIN   
-        [dbo].[Dim_Session] AS DS  
-        ON DP.participantId = DS.participantId  
-    LEFT JOIN   
-        [dbo].[Dim_SessionMetrics] AS SM  
-        ON DS.sessionId = SM.sessionId  
-    WHERE   
-        DC.conversationStart BETWEEN @StartDate AND @EndDate  
-    GROUP BY   
-        DC.conversationId, DC.conversationStart, DC.conversationEnd,  
-        DP.participantId, DP.participantName, DP.purposeId,  
-        DS.sessionId, DS.mediaTypeId, DS.addressFrom, DS.addressTo,  
-        DS.ani, DS.dnis, DS.direction, DS.agentRank, DS.remoteNameDisplayable;  
+ alter PROCEDURE GetConversationDetailsByDate_2     
+    @StartDate DATETIME,    
+    @EndDate DATETIME    
+AS    
+BEGIN    
+    SET NOCOUNT ON;    
+  
+    -- Crear tabla temporal para almacenar resultados    
+    CREATE TABLE #Result (    
+        conversationId UNIQUEIDENTIFIER,    
+        conversationStart DATETIME,    
+        conversationEnd DATETIME,    
+        participantId UNIQUEIDENTIFIER,    
+        participantName NVARCHAR(255),    
+        purposeId INT,    
+        sessionId UNIQUEIDENTIFIER,    
+        mediaTypeId INT,    
+        addressFrom NVARCHAR(255),    
+        addressTo NVARCHAR(255),    
+        ani NVARCHAR(255),    
+        dnis NVARCHAR(255),    
+        direction NVARCHAR(50),    
+        agentRank INT,    
+        remoteNameDisplayable NVARCHAR(255),    
+        conversationStartHourId INT,    
+        entradaCola DATETIME,    
+        salidaCola DATETIME,    
+        tiempoEnCola NVARCHAR(50),    
+        inicioInteraccionCliente DATETIME,    
+        finInteraccionCliente DATETIME,    
+        tiempoTotalInteraccionCliente NVARCHAR(50),    
+        inicioInteraccionAgente DATETIME,    
+        finInteraccionAgente DATETIME,    
+        tiempoInteraccionAgente NVARCHAR(50),  
+        colaId NVARCHAR(50),  
+        colaNombre NVARCHAR(50),  
+        subject_g NVARCHAR(255),  
+        transferido NVARCHAR(50),  
+  concluido NVARCHAR(50)  
+    );    
+  
+    -- Obtener los ConversationId dentro del rango de fechas    
+    DECLARE @conversationId UNIQUEIDENTIFIER;    
+    DECLARE @conversationStart DATETIME;    
+    DECLARE @conversationEnd DATETIME;    
+  
+    DECLARE ConversationCursor CURSOR FOR    
+        SELECT     
+            conversationId,    
+            DATEADD(HOUR, -6, conversationStart),    
+            DATEADD(HOUR, -6, conversationEnd)    
+        FROM     
+            [dbo].[Dim_Conversation]    
+        WHERE     
+            conversationStart BETWEEN @StartDate AND @EndDate;    
+  
+    OPEN ConversationCursor;    
+    FETCH NEXT FROM ConversationCursor INTO @conversationId, @conversationStart, @conversationEnd;    
+  
+    WHILE @@FETCH_STATUS = 0    
+    BEGIN    
+        -- Obtener participantes asociados al ConversationId    
+        DECLARE @participantId UNIQUEIDENTIFIER;    
+        DECLARE @participantName NVARCHAR(255);    
+        DECLARE @purposeId INT;    
+  
+        DECLARE ParticipantCursor CURSOR FOR    
+            SELECT     
+                participantId,    
+                participantName,    
+                purposeId    
+            FROM     
+                 [dbo].[Dim_Participant]    
+            WHERE     
+                conversationId = @conversationId;    
+  
+        OPEN ParticipantCursor;    
+        FETCH NEXT FROM ParticipantCursor INTO @participantId, @participantName, @purposeId;    
+  
+        WHILE @@FETCH_STATUS = 0    
+        BEGIN    
+            -- Obtener sesiones asociadas al ParticipantId    
+            INSERT INTO #Result    
+            SELECT     
+                @conversationId AS conversationId,    
+                @conversationStart AS conversationStart,    
+                @conversationEnd AS conversationEnd,    
+                @participantId AS participantId,    
+                @participantName AS participantName,    
+                @purposeId AS purposeId,    
+                S.sessionId,    
+                S.mediaTypeId,    
+                S.addressFrom,    
+                S.addressTo,    
+                S.ani,    
+                S.dnis,    
+                S.direction,    
+                S.agentRank,    
+                S.remoteNameDisplayable,    
+                NULL AS conversationStartHourId,    
+                -- Subconsulta para Cola    
+                (SELECT MIN(CASE WHEN SM.name_g = 'nOffered' THEN DATEADD(HOUR, -6, SM.emitDate) END)    
+                 FROM [dbo].[Dim_SessionMetrics] AS SM WHERE SM.sessionId = S.sessionId) AS entradaCola,    
+                (SELECT MIN(CASE WHEN SM.name_g = 'tAcd' THEN DATEADD(HOUR, -6, SM.emitDate) END)    
+                 FROM [dbo].[Dim_SessionMetrics] AS SM WHERE SM.sessionId = S.sessionId) AS salidaCola,    
+                (SELECT FORMAT(DATEADD(SECOND, DATEDIFF(SECOND,     
+                          MIN(CASE WHEN SM.name_g = 'nOffered' THEN SM.emitDate END),     
+                          MIN(CASE WHEN SM.name_g = 'tAcd' THEN SM.emitDate END)), 0), 'HH:mm:ss')    
+                FROM [dbo].[Dim_SessionMetrics] AS SM WHERE SM.sessionId = S.sessionId) AS tiempoEnCola,    
+                -- Subconsulta para Interacción Cliente    
+                (SELECT MIN(CASE WHEN SM.name_g = 'nConnected' THEN DATEADD(HOUR, -6, SM.emitDate) END)    
+                 FROM [dbo].[Dim_SessionMetrics] AS SM WHERE SM.sessionId = S.sessionId) AS inicioInteraccionCliente,    
+                (SELECT MIN(CASE WHEN SM.name_g = 'tConnected' THEN DATEADD(HOUR, -6, SM.emitDate) END)    
+                 FROM [dbo].[Dim_SessionMetrics] AS SM WHERE SM.sessionId = S.sessionId) AS finInteraccionCliente,    
+                (SELECT FORMAT(DATEADD(SECOND, DATEDIFF(SECOND,     
+                          MIN(CASE WHEN SM.name_g = 'nConnected' THEN SM.emitDate END),     
+                          MIN(CASE WHEN SM.name_g = 'tConnected' THEN SM.emitDate END)), 0), 'HH:mm:ss')    
+                 FROM [dbo].[Dim_SessionMetrics] AS SM WHERE SM.sessionId = S.sessionId) AS tiempoTotalInteraccionCliente,    
+                -- Subconsulta para Interacción Agente    
+                (SELECT MIN(CASE WHEN SM.name_g = 'tAnswered' THEN DATEADD(HOUR, -6, SM.emitDate) END)    
+                 FROM [dbo].[Dim_SessionMetrics] AS SM WHERE SM.sessionId = S.sessionId) AS inicioInteraccionAgente,    
+                (SELECT MIN(CASE WHEN SM.name_g = 'tAcw' THEN DATEADD(HOUR, -6, SM.emitDate) END)    
+                 FROM [dbo].[Dim_SessionMetrics] AS SM WHERE SM.sessionId = S.sessionId) AS finInteraccionAgente,    
+                (SELECT FORMAT(DATEADD(SECOND, DATEDIFF(SECOND,     
+                          MIN(CASE WHEN SM.name_g = 'tAnswered' THEN SM.emitDate END),     
+                          MIN(CASE WHEN SM.name_g = 'tAcw' THEN SM.emitDate END)), 0), 'HH:mm:ss')    
+                 FROM [dbo].[Dim_SessionMetrics] AS SM WHERE SM.sessionId = S.sessionId) AS tiempoInteraccionAgente,  
+                -- Subconsulta para Queue  
+                    (SELECT TOP (1) Q.queueId    
+                    FROM [dbo].[Dim_Segment] SEG    
+                    JOIN [dbo].[Dim_Queue] Q ON SEG.queueId = Q.queueId    
+                    WHERE SEG.sessionId = S.sessionId) AS colaId,    
+                (SELECT TOP (1) Q.queueName    
+                 FROM [dbo].[Dim_Segment] SEG    
+                 JOIN [dbo].[Dim_Queue] Q ON SEG.queueId = Q.queueId    
+                 WHERE SEG.sessionId = S.sessionId) AS colaNombre,  
+                -- Subject_g  
+                (SELECT TOP (1) SEG.subject_g FROM [dbo].[Dim_Segment] SEG WHERE SEG.sessionId = S.sessionId) AS subject_g,  
+                -- Transferido  
+                (SELECT TOP (1)    
+                    CASE     
+                        WHEN SF.exitReason = 'TRANSFER' THEN 'SI'    
+                        ELSE 'NO'    
+                    END    
+                 FROM [dbo].[Dim_SessionFlow] SF    
+                 WHERE SF.sessionId = S.sessionId AND SF.participantId = @participantId) AS transferido,  
+        (SELECT TOP (1)    
+                    CASE     
+                        WHEN SF.exitReason = 'TRANSFER' THEN 'SI'    
+                        ELSE 'NO'    
+                    END    
+                 FROM [dbo].[Dim_SessionFlow] SF    
+                 WHERE SF.sessionId = S.sessionId AND SF.participantId = @participantId) AS CONCLUIDO  
+            FROM     
+                [dbo].[Dim_Session] AS S    
+            WHERE     
+                S.participantId = @participantId AND    
+                S.mediaTypeId = 3;    
+  
+            FETCH NEXT FROM ParticipantCursor INTO @participantId, @participantName, @purposeId;    
+        END;    
+  
+        CLOSE ParticipantCursor;    
+        DEALLOCATE ParticipantCursor;    
+  
+        FETCH NEXT FROM ConversationCursor INTO @conversationId, @conversationStart, @conversationEnd;    
+    END;    
+  
+    CLOSE ConversationCursor;    
+    DEALLOCATE ConversationCursor;    
+  
+    -- Retornar los datos consolidados    
+    SELECT * FROM #Result;    
+  
+    -- Limpiar tabla temporal    
+    DROP TABLE #Result;    
 END;  
+Quitale todas las subconsultas a este sp y deja solo estos campos dentro de la tabla =
+  conversationId UNIQUEIDENTIFIER,    
+        conversationStart DATETIME,    
+        conversationEnd DATETIME,    
+        participantId UNIQUEIDENTIFIER,    
+        participantName NVARCHAR(255),    
+        sessionId UNIQUEIDENTIFIER,    
+        addressFrom NVARCHAR(255),    
+        addressTo NVARCHAR(255),    
+       
+  concluido NVARCHAR(50)  

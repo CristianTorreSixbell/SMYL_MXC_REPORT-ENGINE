@@ -1,7 +1,7 @@
-import ExtractReportData from '../controllers/createReportController.js';
+import CreateReport from '../controllers/createReportController.js';
 import express from 'express';
 
-const extractReportData = new ExtractReportData();
+const extractReportData = new CreateReport();
 const router = express.Router();
 
 router.post('/', extractReportData.extractReportData);
