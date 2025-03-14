@@ -12,3 +12,9 @@ export {
     timeStamp,
     timeStamp2
 }
+
+
+
+  const startDate = dayjs("2025-03-10T23:01:00.000Z").add(1, 'day');
+
+            console.log('INFO', `Procesando fechas desde ${startDate.format("YYYY-MM-DD")}`);

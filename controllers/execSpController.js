@@ -51,7 +51,6 @@ class ExectSp {
         };
  
         this.execQuery = this.execQuery.bind(this);
-        this.uniqueId = generateUniqueId();
         this.checkSPinDB = this.checkSPinDB.bind(this);
         this.exectSp = this.exectSp.bind(this);
         this.spLocation = path.join(__dirname, '../static/sql-obj/sp2.sql');
@@ -61,13 +60,13 @@ class ExectSp {
 
     async exectSp(req, res) { // Funcion principal, alimentando data historica
         try {
-            const initDate = req.body.initDate ? new Date(req.body.initDate).toISOString() : new Date(dayjs().subtract(2, 'days').utc().startOf('day').format()).toISOString();
-            const endDefaultDate = req.body.endDate ? new Date(req.body.endDate).toISOString() : new Date(dayjs().subtract(1, 'days').utc().endOf('day').format()).toISOString();
+            this.logEvent('INFO', 'Iniciando ejecución del SP', 0);
             const spCheckResult = await this.checkSPinDB();
             if (spCheckResult.status.toUpperCase() !== 'OK') {
                 throw new Error('No se logro verificar la existencia del SP');
             }
 
+            this.logEvent('INFO', 'Obteniendo el primer y último reporte', 0);
             // Obtener el primer y último reporte para determinar el rango de fechas
             let firstReport = await reportModel.findOne().sort({ datesTFind: 1 });
             let lastReport = await reportModel.findOne().sort({ datesTFind: -1 });
@@ -75,20 +74,29 @@ class ExectSp {
             if (!firstReport || !lastReport) {
                 this.logEvent('WARN', 'No se encontraron reportes en la base de datos', 0);
                 this.logEvent('WARN', 'Tomando fecha por defecto', 0);
-                firstReport = { datesTFind: `${initDate} / ${initDate}` };
-                lastReport = { datesTFind: `${endDefaultDate} / ${endDefaultDate}` };
+                firstReport = { datesTFind: `${process.argv[19]}/${process.argv[19]}` };
+                lastReport = { datesTFind: `${fechaMexico}/${fechaMexico}` };
             }
 
-            const startDate = dayjs(firstReport.datesTFind.split(' / ')[0]);
+            this.logEvent('INFO', `Primer reporte: ${JSON.stringify(firstReport)}`, 0);
+            this.logEvent('INFO', `Último reporte: ${JSON.stringify(lastReport)}`, 0);
+
+            const startDate = dayjs(firstReport.datesTFind.split('/')[0]);
             const endDate = dayjs().subtract(1, 'day'); // Hasta el día actual -1
 
+            if (!startDate.isValid()) {
+                throw new Error('Fecha de inicio no válida');
+            }
+
+            this.logEvent('INFO', `Procesando fechas desde ${startDate.format("YYYY-MM-DD")} hasta ${endDate.format("YYYY-MM-DD")}`, 0);
             // Procesar cada día en el rango de fechas
             for (let date = startDate; date.isBefore(endDate); date = date.add(1, 'day')) {
                 const day = date.format("YYYY-MM-DD");
                 const nextDay = date.add(1, 'day').format("YYYY-MM-DD");
 
-                const selectRst = await historicalModel.find({ searchingPeriod: `${day} / ${nextDay}` });
-                const selectReports = await reportModel.find({ datesTFind: `${day} / ${nextDay}` });
+                this.logEvent('INFO', `Procesando el día ${day}`, 0);
+                const selectRst = await historicalModel.find({ searchingPeriod: `${day}/${nextDay}` });
+                const selectReports = await reportModel.find({ datesTFind: `${day}/${nextDay}` });
 
                 if (selectRst.length > 0 || selectReports.length > 0) {
                     this.logEvent('INFO', `Ya se almaceno la informacion para este periodo! ${day}`, 0);
@@ -103,6 +111,10 @@ class ExectSp {
                 
                 const queryRes = await this.execQuery(startDay, endDay);
                 
+                if (!queryRes.data || !queryRes.data.recordset || queryRes.data.recordset.length < 1) {
+                    throw new Error('No se encontraron registros en la consulta');
+                }
+
                 const data = queryRes.data.recordset;
                 const batchSize = 50; // Tamaño del lote
                 for (let i = 0; i < data.length; i += batchSize) {
@@ -113,13 +125,13 @@ class ExectSp {
                     fs.writeFileSync(path.join(__dirname, `./data.json`), JSON.stringify(allDayData, null, 4), 'utf8');
                 }
 
-                const newHistoricalData = new historicalModel({
-                    "searchingPeriod": `${day} / ${nextDay}`,
+                const newHistoricalData =  {
+                    "searchingPeriod": `${day}/${nextDay}`,
                     "clientReporData": allDayData
-                });
+                };
 
                 const saveResult = await historicalModel.findOneAndUpdate(
-                    { searchingPeriod: `${day} / ${nextDay}` },
+                    { searchingPeriod: `${day}/${nextDay}` },
                     newHistoricalData,
                     { upsert: true, new: true }
                 );
@@ -129,22 +141,24 @@ class ExectSp {
 
                 this.logEvent('INFO', `Data guardada con éxito`, 0);
 
-                const reportSchema = {
-                    "datesTFind": `${day} / ${nextDay}`,
+                const reportSchema = {                  
+                    "datesTFind": `${day}/${nextDay}`,
                     "dateProcess": new Date(fechaMexico).toISOString(),
-                    "reportId": this.uniqueId,
+                    "reportId": generateUniqueId(), // Generate a new unique reportId
                     "state": "ready-to",
                     "result": "Data saved in transitory collection"
                 };
 
                 const saveReportResult = await reportModel.findOneAndUpdate(
-                    { datesTFind: `${day} / ${nextDay}` },
+                    { datesTFind: `${day}/${nextDay}` },
                     reportSchema,
-                    { upsert: true, new: true }
+                    { upsert: true, new: true } // Ensure update only, no upsert
                 );
                 if (!saveReportResult) {
                     throw new Error('No se logro guardar el reporte');
                 }
+
+                this.logEvent('INFO', `Reporte guardado con éxito`, 0);
             }
 
             if (res) {
@@ -189,8 +203,8 @@ class ExectSp {
 
     async execQuery(date1, date2) {
         try {
-            if (!date1 || !date2) {
-                throw new Error(`Fechas no ingresadas, la query no se puede ejecutar`);
+            if (!date1 || !date2 || isNaN(new Date(date1).getTime()) || isNaN(new Date(date2).getTime())) {
+                throw new Error(`Fechas no ingresadas o inválidas, la query no se puede ejecutar`);
             }
             this.logEvent('INFO', `Ejecutando sp con fechas ${date1}, ${date2}`, 1);
             const request = new sql.Request();
@@ -255,9 +269,3 @@ class ExectSp {
 }
 
 export default ExectSp;
-
-// Configura el cron job para que se ejecute una vez al día a la medianoche
-// cron.schedule('0 0 * * *', async () => {
-//     const exectSpInstance = new ExectSp();
-//     await exectSpInstance.exectSp();
-// });

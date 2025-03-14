@@ -48,6 +48,8 @@ class CreateReport {
             if (!interval || !reportID) {
                 throw new Error(`No se pudo extraer el intervalo ${interval}`);
             }
+            console.log('Intervalo =', interval);
+            console.log('ReportID =', reportID);
             this.logEvent('INFO', `Verificando la creacion del reporte utilizando el Intervalo: ${interval} `, 0);
             const reportFindStatus= await reportModel.findOne({ reportId: reportID });
             console.log('REPORT FIND STATUS =',JSON.stringify(reportFindStatus, null, 4));
@@ -72,10 +74,11 @@ class CreateReport {
                 throw new Error(`No se pudo extraer el intervalo ${interval}`);
             }
             const findResult = await historicalModel.find({ "searchingPeriod": interval });
-            if (!findResult || findResult.length < 1 || findResult.filter((element) => element == null).length >= 1) {
+            if (!findResult || findResult.length < 1  ) {
                 throw new Error('No se encontraron registros');
             }
-
+            console.log(findResult[0].clientReporData)
+            fs.writeFileSync('./test.json', JSON.stringify(findResult, null, 4));
             const creationRes = await this.generateCSV(findResult[0].clientReporData, initDate);
             const updateStatusRes = await reportModel.findOneAndUpdate(
                 { reportId: reportID },
@@ -149,7 +152,7 @@ class CreateReport {
 
     async generateCSV(sqlData, initDate) {
         try {
-            if (!sqlData || !initDate || sqlData.filter((element) => element !== null).length < 1) {
+            if (!sqlData || !initDate  ) {
                 throw new Error('No se encontraron registros');
             }
             console.log(sqlData[0]);

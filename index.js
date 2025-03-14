@@ -23,8 +23,8 @@ const app = express();
  
 
  
- const sqlConnector = new MSSQLConnector( );
-
+ 
+const sqlConnector = new MSSQLConnector();
 const mongoDBConnector = new MongoDBConnector({
     url: process.argv[2],
     user: process.argv[3],
@@ -36,8 +36,8 @@ const mongoDBConnector = new MongoDBConnector({
 const startServer = async () => {
     try {
         await mongoDBConnector.connect();
-         await sqlConnector.connect();
-   
+        await sqlConnector.connect();
+        
         app.use(express.json());
         app.use(cors());
         app.use(express.urlencoded({ extended: true }));
